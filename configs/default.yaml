@@ -1,0 +1,18 @@
+s3:
+  endpoint: localhost:9000
+  access_key: minioadmin
+  secret_key: minioadmin
+  bucket: data
+  region: us-east-1
+  use_ssl: false
+
+nfs:
+  port: 2049
+
+cache:
+  metadata_ttl: 60s
+  data_dir: /var/cache/s3gw
+  data_max_size: 10737418240  # 10GB
+
+log:
+  level: info
