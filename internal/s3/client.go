@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -19,12 +20,14 @@ type Client struct {
 
 // ClientConfig holds S3 client configuration.
 type ClientConfig struct {
-	Endpoint  string
-	AccessKey string
-	SecretKey string
-	Bucket    string
-	Region    string
-	UseSSL    bool
+	Endpoint         string
+	AccessKey        string
+	SecretKey        string
+	Bucket           string
+	Region           string
+	UseSSL           bool
+	PathStyle        bool   // Use path-style addressing (required for MinIO and ObjectScale)
+	SignatureVersion string // "v2" or "v4" (default "v4")
 }
 
 // NewClient creates a new S3 client and verifies bucket access.
@@ -35,23 +38,38 @@ func NewClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 		IdleConnTimeout:     90 * time.Second,
 	}
 
+	// Select credential provider based on signature version
+	var creds *credentials.Credentials
+	if cfg.SignatureVersion == "v2" {
+		creds = credentials.NewStaticV2(cfg.AccessKey, cfg.SecretKey, "")
+	} else {
+		creds = credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, "")
+	}
+
+	// Configure bucket lookup style
+	bucketLookup := minio.BucketLookupAuto
+	if cfg.PathStyle {
+		bucketLookup = minio.BucketLookupPath
+	}
+
 	mc, err := minio.New(cfg.Endpoint, &minio.Options{
-		Creds:     credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
-		Secure:    cfg.UseSSL,
-		Region:    cfg.Region,
-		Transport: transport,
+		Creds:        creds,
+		Secure:       cfg.UseSSL,
+		Region:       cfg.Region,
+		Transport:    transport,
+		BucketLookup: bucketLookup,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create minio client: %w", err)
 	}
 
-	// Verify bucket exists
-	exists, err := mc.BucketExists(ctx, cfg.Bucket)
-	if err != nil {
-		return nil, fmt.Errorf("check bucket %q: %w", cfg.Bucket, err)
-	}
-	if !exists {
-		return nil, fmt.Errorf("bucket %q does not exist", cfg.Bucket)
+	// Detect backend and log it
+	backend := DetectBackend(cfg.Endpoint)
+	slog.Info("S3 backend detected", "backend", string(backend), "endpoint", cfg.Endpoint)
+
+	// Verify bucket exists with backend-specific error handling
+	if err := ValidateConnection(ctx, mc, cfg.Bucket, backend); err != nil {
+		return nil, err
 	}
 
 	return &Client{mc: mc, bucket: cfg.Bucket}, nil

@@ -24,6 +24,7 @@ type S3Config struct {
 	Bucket    string
 	Region    string
 	UseSSL    bool
+	PathStyle bool
 }
 
 // NFSConfig holds NFS server configuration.
@@ -60,6 +61,7 @@ func Load(path string) (*Config, error) {
 			Bucket:    "data",
 			Region:    "us-east-1",
 			UseSSL:    false,
+			PathStyle: true,
 		},
 		NFS: NFSConfig{
 			Port: 2049,
@@ -97,6 +99,9 @@ func Load(path string) (*Config, error) {
 	}
 	if v := os.Getenv("S3_USE_SSL"); v != "" {
 		cfg.S3.UseSSL = v == "true" || v == "1"
+	}
+	if v := os.Getenv("S3_PATH_STYLE"); v != "" {
+		cfg.S3.PathStyle = v == "true" || v == "1"
 	}
 	if v := os.Getenv("NFS_PORT"); v != "" {
 		port, err := strconv.Atoi(v)

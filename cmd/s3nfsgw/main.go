@@ -67,6 +67,7 @@ func main() {
 		Bucket:    cfg.S3.Bucket,
 		Region:    cfg.S3.Region,
 		UseSSL:    cfg.S3.UseSSL,
+		PathStyle: cfg.S3.PathStyle,
 	})
 	if err != nil {
 		slog.Error("failed to connect to S3", "error", err)

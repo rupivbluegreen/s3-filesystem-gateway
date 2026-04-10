@@ -5,6 +5,7 @@ s3:
   bucket: data
   region: us-east-1
   use_ssl: false
+  path_style: true
 
 nfs:
   port: 2049

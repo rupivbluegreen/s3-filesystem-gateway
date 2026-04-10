@@ -1,0 +1,68 @@
+services:
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin;
+      mc mb --ignore-existing local/data;
+      echo 'test-file-content' | mc pipe local/data/hello.txt;
+      echo 'MinIO initialized with test data';
+      "
+
+  gateway:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      S3_ENDPOINT: minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_BUCKET: data
+      S3_USE_SSL: "false"
+      NFS_PORT: "2049"
+      LOG_LEVEL: debug
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 2049 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  testrunner:
+    image: ubuntu:22.04
+    privileged: true
+    depends_on:
+      gateway:
+        condition: service_healthy
+    environment:
+      GATEWAY_HOST: gateway
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: data
+    volumes:
+      - ../../scripts/test-nfs.sh:/opt/test-nfs.sh:ro
+    entrypoint: >
+      /bin/bash -c "
+      apt-get update -qq &&
+      apt-get install -y -qq nfs-common curl > /dev/null 2>&1 &&
+      chmod +x /opt/test-nfs.sh &&
+      /opt/test-nfs.sh
+      "

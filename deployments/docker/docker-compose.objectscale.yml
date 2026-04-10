@@ -1,0 +1,57 @@
+# Docker Compose override for Dell ObjectScale testing.
+#
+# ObjectScale cannot run as a Docker container, so this file removes the
+# MinIO service and configures the gateway to connect to an external
+# ObjectScale endpoint.
+#
+# Usage:
+#   export OBJECTSCALE_ENDPOINT=objectscale-host:9020
+#   export OBJECTSCALE_ACCESS_KEY=<your-access-key>
+#   export OBJECTSCALE_SECRET_KEY=<your-secret-key>
+#   export OBJECTSCALE_BUCKET=data
+#   export OBJECTSCALE_USE_SSL=false
+#
+#   docker compose -f docker-compose.yml -f docker-compose.objectscale.yml up gateway
+#
+# For HTTPS (port 9021), set OBJECTSCALE_USE_SSL=true and ensure the
+# gateway container trusts the ObjectScale TLS certificate.
+
+services:
+  # Disable MinIO services — ObjectScale is external.
+  minio:
+    profiles: ["disabled"]
+
+  minio-init:
+    profiles: ["disabled"]
+
+  gateway:
+    depends_on: []
+    environment:
+      S3_ENDPOINT: ${OBJECTSCALE_ENDPOINT:?Set OBJECTSCALE_ENDPOINT to your ObjectScale S3 API address (e.g. host:9020)}
+      S3_ACCESS_KEY: ${OBJECTSCALE_ACCESS_KEY:?Set OBJECTSCALE_ACCESS_KEY}
+      S3_SECRET_KEY: ${OBJECTSCALE_SECRET_KEY:?Set OBJECTSCALE_SECRET_KEY}
+      S3_BUCKET: ${OBJECTSCALE_BUCKET:-data}
+      S3_USE_SSL: ${OBJECTSCALE_USE_SSL:-false}
+      S3_PATH_STYLE: "true"
+      S3_REGION: ${OBJECTSCALE_REGION:-us-east-1}
+      NFS_PORT: "2049"
+      LOG_LEVEL: debug
+
+  # Test client for NFS mount testing against the gateway.
+  test-client:
+    image: ubuntu:22.04
+    depends_on:
+      - gateway
+    privileged: true
+    entrypoint: >
+      /bin/bash -c "
+      apt-get update && apt-get install -y nfs-common;
+      mkdir -p /mnt/s3;
+      echo 'Waiting for NFS server...';
+      sleep 5;
+      mount -t nfs4 -o vers=4.0 gateway:2049:/ /mnt/s3;
+      echo 'NFS mount succeeded. Listing files:';
+      ls -la /mnt/s3;
+      echo 'Test complete.';
+      sleep infinity;
+      "
