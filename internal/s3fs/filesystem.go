@@ -15,7 +15,7 @@ import (
 
 // S3FS implements the libnfs-go fs.FS interface backed by S3.
 type S3FS struct {
-	s3      *s3client.Client
+	s3      s3client.S3API
 	handles *HandleStore
 	cache   *cache.MetadataCache
 	creds   nfs.Creds
@@ -25,7 +25,7 @@ var _ nfs.FS = (*S3FS)(nil)
 
 // NewS3FS creates a new S3-backed filesystem. The mc parameter may be nil to
 // disable metadata caching.
-func NewS3FS(s3 *s3client.Client, handles *HandleStore, mc *cache.MetadataCache) *S3FS {
+func NewS3FS(s3 s3client.S3API, handles *HandleStore, mc *cache.MetadataCache) *S3FS {
 	return &S3FS{
 		s3:      s3,
 		handles: handles,
@@ -220,11 +220,12 @@ func (fs *S3FS) Stat(path string) (nfs.FileInfo, error) {
 	// Try as file via S3.
 	objInfo, err := fs.s3.HeadObject(context.Background(), s3Key)
 	if err == nil {
+		isDir := objInfo.IsDir || strings.HasSuffix(s3Key, "/")
 		inode, err := fs.handles.GetOrCreateInode(s3Key)
 		if err != nil {
 			return nil, err
 		}
-		info := newFileInfoFromS3(nameFromPath(path), objInfo.Size, objInfo.LastModified, false, inode, objInfo.UserMetadata)
+		info := newFileInfoFromS3(nameFromPath(path), objInfo.Size, objInfo.LastModified, isDir, inode, objInfo.UserMetadata)
 		fs.cachePut(s3Key, info)
 		return info, nil
 	}
@@ -383,7 +384,7 @@ func (fs *S3FS) MkdirAll(path string, perm os.FileMode) error {
 }
 
 // S3Client returns the underlying S3 client (for use by the NFS server layer).
-func (fs *S3FS) S3Client() *s3client.Client {
+func (fs *S3FS) S3Client() s3client.S3API {
 	return fs.s3
 }
 

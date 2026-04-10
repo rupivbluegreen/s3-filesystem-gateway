@@ -307,3 +307,147 @@ func TestParentPrefix(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultCacheConfig(t *testing.T) {
+	cfg := DefaultCacheConfig()
+	if cfg.MaxEntries != 10000 {
+		t.Errorf("MaxEntries = %d, want 10000", cfg.MaxEntries)
+	}
+	if cfg.FileTTL != 300*time.Second {
+		t.Errorf("FileTTL = %v, want 300s", cfg.FileTTL)
+	}
+	if cfg.DirTTL != 60*time.Second {
+		t.Errorf("DirTTL = %v, want 60s", cfg.DirTTL)
+	}
+	if cfg.NegativeTTL != 10*time.Second {
+		t.Errorf("NegativeTTL = %v, want 10s", cfg.NegativeTTL)
+	}
+	if cfg.EvictionInterval != 30*time.Second {
+		t.Errorf("EvictionInterval = %v, want 30s", cfg.EvictionInterval)
+	}
+}
+
+func TestNewMetadataCacheDefaults(t *testing.T) {
+	// All zero/negative values should be replaced with defaults.
+	mc := NewMetadataCache(CacheConfig{
+		MaxEntries:       -1,
+		FileTTL:          -1,
+		DirTTL:           -1,
+		NegativeTTL:      -1,
+		EvictionInterval: -1,
+	})
+	defer mc.Stop()
+
+	if mc.config.MaxEntries != 10000 {
+		t.Errorf("MaxEntries = %d, want 10000", mc.config.MaxEntries)
+	}
+	if mc.config.FileTTL != 300*time.Second {
+		t.Errorf("FileTTL = %v, want 300s", mc.config.FileTTL)
+	}
+	if mc.config.DirTTL != 60*time.Second {
+		t.Errorf("DirTTL = %v, want 60s", mc.config.DirTTL)
+	}
+	if mc.config.NegativeTTL != 10*time.Second {
+		t.Errorf("NegativeTTL = %v, want 10s", mc.config.NegativeTTL)
+	}
+	if mc.config.EvictionInterval != 30*time.Second {
+		t.Errorf("EvictionInterval = %v, want 30s", mc.config.EvictionInterval)
+	}
+}
+
+func TestPutNegativeUpdateExisting(t *testing.T) {
+	mc := newTestCache()
+	defer mc.Stop()
+
+	// Put a regular entry, then overwrite with negative.
+	mc.PutEntry("file.txt", CacheEntry{S3Key: "file.txt", Size: 100})
+	mc.PutNegative("file.txt")
+
+	got, ok := mc.GetEntry("file.txt")
+	if !ok {
+		t.Fatal("expected cache hit")
+	}
+	if !got.IsNegative() {
+		t.Fatal("expected entry to be negative after overwrite")
+	}
+
+	// Should still be only 1 entry in the LRU.
+	mc.mu.RLock()
+	count := mc.order.Len()
+	mc.mu.RUnlock()
+	if count != 1 {
+		t.Errorf("expected 1 entry in LRU, got %d", count)
+	}
+}
+
+func TestPutNegativeLRUEviction(t *testing.T) {
+	cfg := testConfig()
+	cfg.MaxEntries = 2
+	mc := NewMetadataCache(cfg)
+	defer mc.Stop()
+
+	mc.PutNegative("a")
+	mc.PutNegative("b")
+	// This should evict "a".
+	mc.PutNegative("c")
+
+	if _, ok := mc.GetEntry("a"); ok {
+		t.Fatal("expected 'a' to be evicted")
+	}
+	if _, ok := mc.GetEntry("c"); !ok {
+		t.Fatal("expected 'c' to be present")
+	}
+}
+
+func TestEvictOldestLockedEmptyCache(t *testing.T) {
+	mc := newTestCache()
+	defer mc.Stop()
+
+	// Call evictOldestLocked on empty cache - should not panic.
+	mc.mu.Lock()
+	mc.evictOldestLocked()
+	mc.mu.Unlock()
+
+	mc.mu.RLock()
+	count := mc.order.Len()
+	mc.mu.RUnlock()
+	if count != 0 {
+		t.Errorf("expected 0 entries, got %d", count)
+	}
+}
+
+func TestEvictExpiredDirListings(t *testing.T) {
+	cfg := testConfig()
+	cfg.DirTTL = 10 * time.Millisecond
+	cfg.EvictionInterval = 1 * time.Hour // manual trigger
+	mc := NewMetadataCache(cfg)
+	defer mc.Stop()
+
+	mc.PutDirListing("dir/", []CacheEntry{{S3Key: "dir/a.txt"}})
+	mc.PutEntry("dir/a.txt", CacheEntry{S3Key: "dir/a.txt", IsDir: false})
+
+	time.Sleep(20 * time.Millisecond)
+
+	// Manually trigger eviction.
+	mc.evictExpired()
+
+	mc.mu.RLock()
+	_, dirExists := mc.dirListings["dir/"]
+	_, entryExists := mc.items["dir/a.txt"]
+	mc.mu.RUnlock()
+
+	if dirExists {
+		t.Fatal("expected dir listing to be evicted")
+	}
+	// File entry has FileTTL (200ms) so should still be present.
+	if !entryExists {
+		t.Fatal("expected file entry to still exist")
+	}
+}
+
+func TestIsNegativeFalse(t *testing.T) {
+	e := &CacheEntry{S3Key: "file.txt"}
+	if e.IsNegative() {
+		t.Fatal("expected IsNegative to be false for regular entry")
+	}
+}

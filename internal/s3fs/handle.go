@@ -67,10 +67,13 @@ func (s *HandleStore) init() error {
 			s.nextInode = rootInode + 1
 		}
 
-		// Ensure root inode exists
+		// Ensure root inode exists.
+		// Use a sentinel key "\x00" for the root directory because bbolt
+		// rejects zero-length keys. The in-memory maps still use "" for
+		// the root so the rest of the code is unaffected.
 		inodes := tx.Bucket(bucketInodes)
 		keys := tx.Bucket(bucketKeys)
-		rootKey := []byte("")
+		rootKey := []byte("\x00")
 
 		if inodes.Get(uint64ToBytes(rootInode)) == nil {
 			if err := inodes.Put(uint64ToBytes(rootInode), rootKey); err != nil {
@@ -81,10 +84,10 @@ func (s *HandleStore) init() error {
 			}
 		}
 
-		// Load all mappings into memory
+		// Load all mappings into memory.
 		return inodes.ForEach(func(k, v []byte) error {
 			inode := binary.BigEndian.Uint64(k)
-			key := string(v)
+			key := boltToS3Key(v)
 			s.inodeToKey[inode] = key
 			s.keyToInode[key] = inode
 			return nil
@@ -117,10 +120,10 @@ func (s *HandleStore) GetOrCreateInode(s3Key string) (uint64, error) {
 		keys := tx.Bucket(bucketKeys)
 		meta := tx.Bucket(bucketMeta)
 
-		if err := inodes.Put(uint64ToBytes(inode), []byte(s3Key)); err != nil {
+		if err := inodes.Put(uint64ToBytes(inode), s3KeyToBolt(s3Key)); err != nil {
 			return err
 		}
-		if err := keys.Put([]byte(s3Key), uint64ToBytes(inode)); err != nil {
+		if err := keys.Put(s3KeyToBolt(s3Key), uint64ToBytes(inode)); err != nil {
 			return err
 		}
 		return meta.Put(keyNextInode, uint64ToBytes(s.nextInode))
@@ -164,7 +167,7 @@ func (s *HandleStore) RemoveByKey(s3Key string) error {
 		if err := tx.Bucket(bucketInodes).Delete(uint64ToBytes(inode)); err != nil {
 			return err
 		}
-		return tx.Bucket(bucketKeys).Delete([]byte(s3Key))
+		return tx.Bucket(bucketKeys).Delete(s3KeyToBolt(s3Key))
 	})
 	if err != nil {
 		return fmt.Errorf("remove inode: %w", err)
@@ -189,13 +192,13 @@ func (s *HandleStore) RenameKey(oldKey, newKey string) error {
 		inodes := tx.Bucket(bucketInodes)
 		keys := tx.Bucket(bucketKeys)
 
-		if err := keys.Delete([]byte(oldKey)); err != nil {
+		if err := keys.Delete(s3KeyToBolt(oldKey)); err != nil {
 			return err
 		}
-		if err := keys.Put([]byte(newKey), uint64ToBytes(inode)); err != nil {
+		if err := keys.Put(s3KeyToBolt(newKey), uint64ToBytes(inode)); err != nil {
 			return err
 		}
-		return inodes.Put(uint64ToBytes(inode), []byte(newKey))
+		return inodes.Put(uint64ToBytes(inode), s3KeyToBolt(newKey))
 	})
 	if err != nil {
 		return fmt.Errorf("rename inode: %w", err)
@@ -234,4 +237,22 @@ func uint64ToBytes(v uint64) []byte {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, v)
 	return buf
+}
+
+// s3KeyToBolt encodes an S3 key for storage in bbolt. Empty keys (the root
+// directory) are stored as the sentinel "\x00" because bbolt rejects
+// zero-length keys.
+func s3KeyToBolt(s3Key string) []byte {
+	if s3Key == "" {
+		return []byte("\x00")
+	}
+	return []byte(s3Key)
+}
+
+// boltToS3Key decodes a bbolt key back to an S3 key.
+func boltToS3Key(b []byte) string {
+	if len(b) == 1 && b[0] == 0 {
+		return ""
+	}
+	return string(b)
 }

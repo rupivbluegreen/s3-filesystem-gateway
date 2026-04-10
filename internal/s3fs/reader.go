@@ -20,7 +20,7 @@ const (
 
 // chunkReader implements ranged reads with adaptive prefetch against S3.
 type chunkReader struct {
-	s3    *s3client.Client
+	s3    s3client.S3API
 	s3Key string
 	size  int64 // total file size
 
@@ -36,7 +36,7 @@ type chunkReader struct {
 }
 
 // newChunkReader creates a chunkReader for the given S3 object.
-func newChunkReader(s3 *s3client.Client, key string, size int64) *chunkReader {
+func newChunkReader(s3 s3client.S3API, key string, size int64) *chunkReader {
 	return &chunkReader{
 		s3:        s3,
 		s3Key:     key,

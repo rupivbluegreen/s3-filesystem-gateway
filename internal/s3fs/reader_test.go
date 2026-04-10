@@ -412,5 +412,5 @@ func TestSeekWithinBuffer(t *testing.T) {
 
 // Ensure chunkReader compiles against real s3client.Client (type check only).
 func TestChunkReaderTypeCheck(t *testing.T) {
-	var _ *chunkReader = newChunkReader((*s3client.Client)(nil), "key", 100)
+	var _ *chunkReader = newChunkReader((s3client.S3API)((*s3client.Client)(nil)), "key", 100)
 }

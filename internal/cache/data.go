@@ -19,6 +19,16 @@ const (
 	defaultDataCacheMaxSize = 10 * 1024 * 1024 * 1024 // 10 GB
 )
 
+// osCreateTemp is a hook for testing; defaults to os.CreateTemp.
+var osCreateTemp = os.CreateTemp
+
+// osReadDir is a hook for testing; defaults to os.ReadDir.
+var osReadDir = os.ReadDir
+
+// afterCopy is called after io.Copy in Put, before Close. It is a no-op by
+// default; tests can override it to simulate close errors.
+var afterCopy = func(f *os.File) {}
+
 // DataCacheConfig holds configuration for the disk-based data cache.
 type DataCacheConfig struct {
 	// Dir is the directory where cached data files are stored.
@@ -28,13 +38,17 @@ type DataCacheConfig struct {
 	// MaxSize is the maximum total size of cached data in bytes.
 	// Default: 10 GB
 	MaxSize int64
+
+	// EvictionInterval is how often the background eviction runs. Default: 30s.
+	EvictionInterval time.Duration
 }
 
 // DefaultDataCacheConfig returns a DataCacheConfig with sensible defaults.
 func DefaultDataCacheConfig() DataCacheConfig {
 	return DataCacheConfig{
-		Dir:     defaultDataCacheDir,
-		MaxSize: defaultDataCacheMaxSize,
+		Dir:              defaultDataCacheDir,
+		MaxSize:          defaultDataCacheMaxSize,
+		EvictionInterval: 30 * time.Second,
 	}
 }
 
@@ -81,6 +95,9 @@ func NewDataCache(config DataCacheConfig) (*DataCache, error) {
 	}
 	if config.MaxSize <= 0 {
 		config.MaxSize = defaultDataCacheMaxSize
+	}
+	if config.EvictionInterval <= 0 {
+		config.EvictionInterval = 30 * time.Second
 	}
 
 	if err := os.MkdirAll(config.Dir, 0o755); err != nil {
@@ -153,13 +170,14 @@ func (dc *DataCache) Put(s3Key, etag string, reader io.Reader, size int64) error
 	}
 
 	// Write to a temp file first, then rename for atomicity.
-	tmp, err := os.CreateTemp(dir, ".tmp-*")
+	tmp, err := osCreateTemp(dir, ".tmp-*")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
 	tmpPath := tmp.Name()
 
 	written, err := io.Copy(tmp, reader)
+	afterCopy(tmp)
 	if cerr := tmp.Close(); cerr != nil && err == nil {
 		err = cerr
 	}
@@ -258,9 +276,6 @@ func (dc *DataCache) evict() {
 
 	for dc.currentSize > dc.config.MaxSize && dc.order.Len() > 0 {
 		back := dc.order.Back()
-		if back == nil {
-			break
-		}
 		entry := back.Value.(*dataEntry)
 		path := dc.cachePath(entry.key)
 		os.Remove(path)
@@ -273,7 +288,7 @@ func (dc *DataCache) evict() {
 // scanDir scans the cache directory on startup to rebuild the in-memory LRU
 // index from existing files on disk.
 func (dc *DataCache) scanDir() {
-	shards, err := os.ReadDir(dc.config.Dir)
+	shards, err := osReadDir(dc.config.Dir)
 	if err != nil {
 		return
 	}
@@ -283,7 +298,7 @@ func (dc *DataCache) scanDir() {
 			continue
 		}
 		shardPath := filepath.Join(dc.config.Dir, shard.Name())
-		files, err := os.ReadDir(shardPath)
+		files, err := osReadDir(shardPath)
 		if err != nil {
 			continue
 		}
@@ -312,7 +327,7 @@ func (dc *DataCache) scanDir() {
 // evictionLoop periodically checks if the cache exceeds its max size.
 func (dc *DataCache) evictionLoop() {
 	defer close(dc.done)
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(dc.config.EvictionInterval)
 	defer ticker.Stop()
 
 	for {
