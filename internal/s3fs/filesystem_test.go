@@ -338,8 +338,8 @@ func TestAttributes(t *testing.T) {
 	if attrs.LinkSupport {
 		t.Error("expected LinkSupport=false")
 	}
-	if attrs.SymlinkSupport {
-		t.Error("expected SymlinkSupport=false")
+	if !attrs.SymlinkSupport {
+		t.Error("expected SymlinkSupport=true")
 	}
 	if !attrs.ChownRestricted {
 		t.Error("expected ChownRestricted=true")
@@ -944,13 +944,24 @@ func TestRenameNonExistent(t *testing.T) {
 // Tests: Symlink, Readlink, Link (unsupported)
 // ---------------------------------------------------------------------------
 
-func TestSymlinkNotSupported(t *testing.T) {
+func TestSymlinkCreatesMarkerObject(t *testing.T) {
 	fsys, _, cleanup := setupTestFS(t)
 	defer cleanup()
 
-	err := fsys.Symlink("/old", "/new")
+	// Symlink to a non-existent path should succeed.
+	err := fsys.Symlink("/target/path", "/link/path")
+	if err != nil {
+		t.Fatalf("Symlink() unexpected error: %v", err)
+	}
+}
+
+func TestSymlinkEmptyTarget(t *testing.T) {
+	fsys, _, cleanup := setupTestFS(t)
+	defer cleanup()
+
+	err := fsys.Symlink("", "/link/path")
 	if err == nil {
-		t.Fatal("expected error for Symlink")
+		t.Fatal("expected error for empty symlink target")
 	}
 }
 
