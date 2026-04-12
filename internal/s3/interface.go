@@ -18,6 +18,7 @@ type S3API interface {
 	PutObject(ctx context.Context, key string, reader io.Reader, size int64, metadata map[string]string) error
 	DeleteObject(ctx context.Context, key string) error
 	CopyObject(ctx context.Context, srcKey, dstKey string) error
+	CopyObjectWithMetadata(ctx context.Context, key string, metadata map[string]string) error
 	CreateDirMarker(ctx context.Context, key string) error
 }
 

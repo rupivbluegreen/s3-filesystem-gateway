@@ -202,6 +202,22 @@ func (c *Client) CopyObject(ctx context.Context, srcKey, dstKey string) error {
 	return err
 }
 
+// CopyObjectWithMetadata copies an object onto itself with new metadata (metadata replace).
+func (c *Client) CopyObjectWithMetadata(ctx context.Context, key string, metadata map[string]string) error {
+	src := minio.CopySrcOptions{
+		Bucket: c.bucket,
+		Object: key,
+	}
+	dst := minio.CopyDestOptions{
+		Bucket:          c.bucket,
+		Object:          key,
+		UserMetadata:    metadata,
+		ReplaceMetadata: true,
+	}
+	_, err := c.mc.CopyObject(ctx, dst, src)
+	return err
+}
+
 // CreateDirMarker creates a zero-byte object as a directory marker.
 func (c *Client) CreateDirMarker(ctx context.Context, key string) error {
 	_, err := c.mc.PutObject(ctx, c.bucket, key, nil, 0, minio.PutObjectOptions{})

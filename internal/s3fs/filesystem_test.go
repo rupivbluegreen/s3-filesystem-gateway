@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
@@ -207,6 +206,21 @@ func (m *mockS3) CreateDirMarker(_ context.Context, key string) error {
 		data:    nil,
 		modTime: time.Now().UTC(),
 	}
+	return nil
+}
+
+func (m *mockS3) CopyObjectWithMetadata(_ context.Context, key string, metadata map[string]string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	obj, ok := m.objects[key]
+	if !ok {
+		return fmt.Errorf("NoSuchKey: %s", key)
+	}
+	metaCopy := make(map[string]string, len(metadata))
+	for k, v := range metadata {
+		metaCopy[k] = v
+	}
+	obj.metadata = metaCopy
 	return nil
 }
 
@@ -961,26 +975,86 @@ func TestLinkNotSupported(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Tests: Chmod, Chown (no-ops)
+// Tests: Chmod, Chown (via S3 metadata)
 // ---------------------------------------------------------------------------
 
 func TestChmod(t *testing.T) {
+	fsys, mock, cleanup := setupTestFS(t)
+	defer cleanup()
+
+	mock.put("file.txt", []byte("data"), map[string]string{"Mode": "644"})
+
+	err := fsys.Chmod("/file.txt", 0755)
+	if err != nil {
+		t.Fatalf("Chmod: got %v, want nil", err)
+	}
+
+	mock.mu.RLock()
+	obj := mock.objects["file.txt"]
+	mock.mu.RUnlock()
+	if obj.metadata["Mode"] != "755" {
+		t.Errorf("expected Mode=755, got %q", obj.metadata["Mode"])
+	}
+}
+
+func TestChmodNotExist(t *testing.T) {
 	fsys, _, cleanup := setupTestFS(t)
 	defer cleanup()
 
-	err := fsys.Chmod("/file", 0755)
-	if err != syscall.ENOTSUP {
-		t.Fatalf("Chmod: got %v, want ENOTSUP", err)
+	err := fsys.Chmod("/nonexistent", 0755)
+	if err != os.ErrNotExist {
+		t.Fatalf("Chmod on missing file: got %v, want os.ErrNotExist", err)
 	}
 }
 
 func TestChown(t *testing.T) {
+	fsys, mock, cleanup := setupTestFS(t)
+	defer cleanup()
+
+	mock.put("file.txt", []byte("data"), map[string]string{})
+
+	err := fsys.Chown("/file.txt", 1000, 2000)
+	if err != nil {
+		t.Fatalf("Chown: got %v, want nil", err)
+	}
+
+	mock.mu.RLock()
+	obj := mock.objects["file.txt"]
+	mock.mu.RUnlock()
+	if obj.metadata["Uid"] != "1000" {
+		t.Errorf("expected Uid=1000, got %q", obj.metadata["Uid"])
+	}
+	if obj.metadata["Gid"] != "2000" {
+		t.Errorf("expected Gid=2000, got %q", obj.metadata["Gid"])
+	}
+}
+
+func TestChownNotExist(t *testing.T) {
 	fsys, _, cleanup := setupTestFS(t)
 	defer cleanup()
 
-	err := fsys.Chown("/file", 1000, 1000)
-	if err != syscall.ENOTSUP {
-		t.Fatalf("Chown: got %v, want ENOTSUP", err)
+	err := fsys.Chown("/nonexistent", 1000, 1000)
+	if err != os.ErrNotExist {
+		t.Fatalf("Chown on missing file: got %v, want os.ErrNotExist", err)
+	}
+}
+
+func TestChmodDirectory(t *testing.T) {
+	fsys, mock, cleanup := setupTestFS(t)
+	defer cleanup()
+
+	mock.put("mydir/", []byte{}, nil)
+
+	err := fsys.Chmod("/mydir", 0755)
+	if err != nil {
+		t.Fatalf("Chmod on dir: got %v, want nil", err)
+	}
+
+	mock.mu.RLock()
+	obj := mock.objects["mydir/"]
+	mock.mu.RUnlock()
+	if obj.metadata["Mode"] != "755" {
+		t.Errorf("expected Mode=755, got %q", obj.metadata["Mode"])
 	}
 }
 

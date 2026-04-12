@@ -6,10 +6,9 @@ package s3fs
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
+	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	nfs "github.com/smallfz/libnfs-go/fs"
@@ -48,7 +47,7 @@ func (fs *S3FS) SetCreds(creds nfs.Creds) {
 func (fs *S3FS) Attributes() *nfs.Attributes {
 	return &nfs.Attributes{
 		LinkSupport:     false, // S3 doesn't support hard links
-		SymlinkSupport:  false, // S3 doesn't support symlinks
+		SymlinkSupport:  true, // symlinks stored as S3 marker objects
 		ChownRestricted: true,
 		MaxName:         1024,    // S3 key max is 1024 bytes
 		MaxRead:         1048576, // 1MB
@@ -269,24 +268,114 @@ func (fs *S3FS) Stat(path string) (nfs.FileInfo, error) {
 
 // Chmod changes file permissions (stored as S3 metadata).
 func (fs *S3FS) Chmod(path string, mode os.FileMode) error {
-	slog.Debug("chmod not supported", "path", path, "mode", mode)
-	return syscall.ENOTSUP
+	ctx := context.Background()
+	s3Key := s3KeyFromPath(path)
+
+	objInfo, err := fs.s3.HeadObject(ctx, s3Key)
+	if err != nil {
+		dirKey := s3DirKey(s3Key)
+		objInfo, err = fs.s3.HeadObject(ctx, dirKey)
+		if err != nil {
+			return os.ErrNotExist
+		}
+		s3Key = dirKey
+	}
+
+	meta := objInfo.UserMetadata
+	if meta == nil {
+		meta = make(map[string]string)
+	}
+	meta[MetaKeyMode] = strconv.FormatUint(uint64(mode.Perm()), 8)
+
+	if err := fs.s3.CopyObjectWithMetadata(ctx, s3Key, meta); err != nil {
+		return fmt.Errorf("chmod: %w", err)
+	}
+
+	fs.cacheInvalidate(s3Key)
+	return nil
 }
 
 // Chown changes file ownership (stored as S3 metadata).
 func (fs *S3FS) Chown(path string, uid, gid int) error {
-	slog.Debug("chown not supported", "path", path, "uid", uid, "gid", gid)
-	return syscall.ENOTSUP
+	ctx := context.Background()
+	s3Key := s3KeyFromPath(path)
+
+	objInfo, err := fs.s3.HeadObject(ctx, s3Key)
+	if err != nil {
+		dirKey := s3DirKey(s3Key)
+		objInfo, err = fs.s3.HeadObject(ctx, dirKey)
+		if err != nil {
+			return os.ErrNotExist
+		}
+		s3Key = dirKey
+	}
+
+	meta := objInfo.UserMetadata
+	if meta == nil {
+		meta = make(map[string]string)
+	}
+	if uid >= 0 {
+		meta[MetaKeyUID] = strconv.Itoa(uid)
+	}
+	if gid >= 0 {
+		meta[MetaKeyGID] = strconv.Itoa(gid)
+	}
+
+	if err := fs.s3.CopyObjectWithMetadata(ctx, s3Key, meta); err != nil {
+		return fmt.Errorf("chown: %w", err)
+	}
+
+	fs.cacheInvalidate(s3Key)
+	return nil
 }
 
-// Symlink creates a symbolic link (not supported on S3).
-func (fs *S3FS) Symlink(oldname, newname string) error {
-	return fmt.Errorf("symlinks not supported on S3")
+// Symlink creates a symbolic link stored as an S3 marker object with metadata.
+func (fs *S3FS) Symlink(target, linkPath string) error {
+	if target == "" {
+		return fmt.Errorf("empty symlink target")
+	}
+	if len(target) > 4080 {
+		return fmt.Errorf("symlink target too long (max 4080 bytes)")
+	}
+
+	ctx := context.Background()
+	s3Key := s3KeyFromPath(linkPath)
+
+	if _, err := fs.s3.HeadObject(ctx, s3Key); err == nil {
+		return os.ErrExist
+	}
+
+	meta := map[string]string{
+		MetaKeySymlinkTarget: target,
+		MetaKeyUID:           strconv.Itoa(DefaultUID),
+		MetaKeyGID:           strconv.Itoa(DefaultGID),
+		MetaKeyMode:          "0777",
+	}
+
+	if err := fs.s3.PutObject(ctx, s3Key, strings.NewReader(""), 0, meta); err != nil {
+		return fmt.Errorf("create symlink: %w", err)
+	}
+
+	fs.cacheInvalidateParent(s3Key)
+	return nil
 }
 
-// Readlink reads a symbolic link (not supported on S3).
-func (fs *S3FS) Readlink(name string) (string, error) {
-	return "", fmt.Errorf("symlinks not supported on S3")
+// Readlink reads the target of a symbolic link stored as an S3 marker object.
+func (fs *S3FS) Readlink(path string) (string, error) {
+	ctx := context.Background()
+	s3Key := s3KeyFromPath(path)
+
+	objInfo, err := fs.s3.HeadObject(ctx, s3Key)
+	if err != nil {
+		return "", os.ErrNotExist
+	}
+
+	target := symlinkTarget(objInfo.UserMetadata)
+	if target == "" {
+		return "", fmt.Errorf("not a symlink")
+	}
+
+	return target, nil
 }
 
 // Link creates a hard link (not supported on S3).
