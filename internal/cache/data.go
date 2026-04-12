@@ -44,6 +44,10 @@ type DataCacheConfig struct {
 
 	// EvictionInterval is how often the background eviction runs. Default: 30s.
 	EvictionInterval time.Duration
+
+	// DataTTL is the maximum age of a cache entry before it is expired.
+	// 0 means no TTL expiry.
+	DataTTL time.Duration
 }
 
 // DefaultDataCacheConfig returns a DataCacheConfig with sensible defaults.
@@ -138,8 +142,21 @@ func (dc *DataCache) Get(s3Key, etag string) (io.ReadCloser, bool) {
 		return nil, false
 	}
 
-	// Update access time and move to front.
 	entry := elem.Value.(*dataEntry)
+
+	// Check TTL expiry.
+	if dc.config.DataTTL > 0 && time.Since(entry.accessTime) > dc.config.DataTTL {
+		path := dc.cachePath(key)
+		os.Remove(path)
+		dc.currentSize -= entry.size
+		dc.order.Remove(elem)
+		delete(dc.items, key)
+		dc.mu.Unlock()
+		dc.misses.Add(1)
+		return nil, false
+	}
+
+	// Update access time and move to front.
 	entry.accessTime = time.Now()
 	dc.order.MoveToFront(elem)
 	dc.mu.Unlock()
@@ -272,11 +289,29 @@ func (dc *DataCache) cachePath(key string) string {
 	return filepath.Join(dc.config.Dir, key[:2], key)
 }
 
-// evict removes least recently used entries until the cache is under MaxSize.
+// evict removes expired and least recently used entries.
 func (dc *DataCache) evict() {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
 
+	// TTL-based eviction.
+	if dc.config.DataTTL > 0 {
+		now := time.Now()
+		for dc.order.Len() > 0 {
+			back := dc.order.Back()
+			entry := back.Value.(*dataEntry)
+			if now.Sub(entry.accessTime) <= dc.config.DataTTL {
+				break
+			}
+			path := dc.cachePath(entry.key)
+			os.Remove(path)
+			dc.currentSize -= entry.size
+			dc.order.Remove(back)
+			delete(dc.items, entry.key)
+		}
+	}
+
+	// Size-based eviction.
 	for dc.currentSize > dc.config.MaxSize && dc.order.Len() > 0 {
 		back := dc.order.Back()
 		entry := back.Value.(*dataEntry)
