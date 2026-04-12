@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	nfs "github.com/smallfz/libnfs-go/fs"
 	"github.com/vipurkumar/s3-filesystem-gateway/internal/cache"
@@ -26,9 +27,11 @@ type s3File struct {
 	s3Key    string // S3 object key
 	info     *fileInfo
 	isDir    bool
+	writable bool // true if opened with write flags
 	offset   int64
 	chunked  *chunkReader // ranged-read reader with adaptive prefetch
 	closed   bool
+	etag     string
 }
 
 var _ nfs.File = (*s3File)(nil)
@@ -54,7 +57,7 @@ func (f *s3File) Read(p []byte) (int, error) {
 
 	// Lazy-init the chunk reader.
 	if f.chunked == nil {
-		f.chunked = newChunkReader(f.fs.s3, f.s3Key, f.info.Size())
+		f.chunked = newChunkReader(f.fs.s3, f.s3Key, f.info.Size(), f.fs.dataCache, f.etag)
 	}
 
 	n, err := f.chunked.ReadAt(p, f.offset)
@@ -99,7 +102,32 @@ func (f *s3File) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (f *s3File) Truncate() error {
-	return fmt.Errorf("truncate not supported yet")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.closed {
+		return os.ErrClosed
+	}
+	if !f.writable {
+		return fmt.Errorf("truncate %s: read-only file descriptor", f.path)
+	}
+
+	ctx := context.Background()
+	meta := posixMetadata(DefaultUID, DefaultGID, DefaultFileMode)
+	if err := f.fs.s3.PutObject(ctx, f.s3Key, strings.NewReader(""), 0, meta); err != nil {
+		return fmt.Errorf("truncate: %w", err)
+	}
+
+	f.info.size = 0
+	f.offset = 0
+	if f.chunked != nil {
+		f.chunked.Close()
+		f.chunked = nil
+	}
+
+	f.fs.cacheInvalidate(f.s3Key)
+	f.fs.dataCacheInvalidate(f.s3Key)
+	return nil
 }
 
 func (f *s3File) Sync() error {
@@ -323,6 +351,18 @@ func (f *s3WritableFile) Close() error {
 	// Invalidate cache so subsequent reads see the new data.
 	f.fs.cacheInvalidate(f.s3Key)
 	f.fs.cacheInvalidateParent(f.s3Key)
+	f.fs.dataCacheInvalidate(f.s3Key)
+
+	// Refresh metadata cache with new file info for read-after-write consistency.
+	f.fs.cachePut(f.s3Key, &fileInfo{
+		name:     nameFromPath(f.path),
+		size:     size,
+		mode:     DefaultFileMode,
+		modTime:  time.Now().UTC(),
+		isDir:    false,
+		inode:    f.info.inode,
+		numLinks: 1,
+	})
 
 	return nil
 }

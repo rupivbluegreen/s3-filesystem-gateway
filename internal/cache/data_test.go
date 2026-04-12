@@ -819,3 +819,39 @@ func TestNewDataCache_EvictionIntervalDefault(t *testing.T) {
 		t.Errorf("EvictionInterval = %v, want 30s", dc.config.EvictionInterval)
 	}
 }
+
+func TestDataCacheTTLExpiry(t *testing.T) {
+	dir := t.TempDir()
+	dc, err := NewDataCache(DataCacheConfig{
+		Dir:              dir,
+		MaxSize:          10 * 1024 * 1024,
+		EvictionInterval: time.Hour,
+		DataTTL:          50 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dc.Stop()
+
+	err = dc.Put("key1", "etag1", strings.NewReader("data"), 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should hit immediately
+	rc, ok := dc.Get("key1", "etag1")
+	if !ok {
+		t.Fatal("expected cache hit")
+	}
+	rc.Close()
+
+	// Wait for TTL
+	time.Sleep(100 * time.Millisecond)
+
+	// Should miss after TTL
+	rc, ok = dc.Get("key1", "etag1")
+	if ok {
+		rc.Close()
+		t.Fatal("expected cache miss after TTL")
+	}
+}

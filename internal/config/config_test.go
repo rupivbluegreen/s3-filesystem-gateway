@@ -229,3 +229,46 @@ func TestLoad_InvalidHealthPort(t *testing.T) {
 		t.Error("error message should not be empty")
 	}
 }
+
+func TestLoadDataCacheEnvVars(t *testing.T) {
+	t.Setenv("S3_ACCESS_KEY", "test")
+	t.Setenv("S3_SECRET_KEY", "test")
+	t.Setenv("CACHE_DATA_DIR", "/tmp/test-cache")
+	t.Setenv("CACHE_DATA_MAX_SIZE", "5368709120")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Cache.DataDir != "/tmp/test-cache" {
+		t.Errorf("DataDir = %q, want /tmp/test-cache", cfg.Cache.DataDir)
+	}
+	if cfg.Cache.DataMaxSize != 5368709120 {
+		t.Errorf("DataMaxSize = %d, want 5368709120", cfg.Cache.DataMaxSize)
+	}
+}
+
+func TestLoadCacheMetadataTTLEnvVar(t *testing.T) {
+	t.Setenv("S3_ACCESS_KEY", "test")
+	t.Setenv("S3_SECRET_KEY", "test")
+	t.Setenv("CACHE_METADATA_TTL", "120s")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Cache.MetadataTTL != 120*time.Second {
+		t.Errorf("MetadataTTL = %v, want 120s", cfg.Cache.MetadataTTL)
+	}
+}
+
+func TestLoadInvalidCacheMaxSize(t *testing.T) {
+	t.Setenv("S3_ACCESS_KEY", "test")
+	t.Setenv("S3_SECRET_KEY", "test")
+	t.Setenv("CACHE_DATA_MAX_SIZE", "notanumber")
+
+	_, err := Load("")
+	if err == nil {
+		t.Fatal("expected error for invalid CACHE_DATA_MAX_SIZE")
+	}
+}
