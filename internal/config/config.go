@@ -128,6 +128,23 @@ func Load(path string) (*Config, error) {
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		cfg.Log.Level = v
 	}
+	if v := os.Getenv("CACHE_DATA_DIR"); v != "" {
+		cfg.Cache.DataDir = v
+	}
+	if v := os.Getenv("CACHE_DATA_MAX_SIZE"); v != "" {
+		size, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CACHE_DATA_MAX_SIZE: %w", err)
+		}
+		cfg.Cache.DataMaxSize = size
+	}
+	if v := os.Getenv("CACHE_METADATA_TTL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CACHE_METADATA_TTL: %w", err)
+		}
+		cfg.Cache.MetadataTTL = d
+	}
 
 	// Validate required credentials
 	if cfg.S3.AccessKey == "" || cfg.S3.SecretKey == "" {
