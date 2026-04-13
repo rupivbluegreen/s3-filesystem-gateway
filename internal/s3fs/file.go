@@ -92,7 +92,7 @@ func (f *s3File) Seek(offset int64, whence int) (int64, error) {
 
 	// Reposition the chunk reader (invalidates buffer only if needed).
 	if f.chunked != nil && newOffset != f.offset {
-		if err := f.chunked.Seek(newOffset); err != nil {
+		if err := f.chunked.SeekTo(newOffset); err != nil {
 			return 0, err
 		}
 	}

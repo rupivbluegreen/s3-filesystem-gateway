@@ -186,10 +186,12 @@ func (r *chunkReader) adaptChunkSize() {
 	}
 }
 
-// Seek repositions the logical offset. The buffer is invalidated only when
-// the new position falls outside the current buffer, keeping seeks within
-// already-fetched data essentially free.
-func (r *chunkReader) Seek(offset int64) error {
+// SeekTo repositions the logical offset. Named SeekTo rather than Seek to
+// avoid colliding with io.Seeker's (int64, int) (int64, error) signature —
+// chunkReader is an internal type, not an io.Seeker. The buffer is
+// invalidated only when the new position falls outside the current buffer,
+// keeping seeks within already-fetched data essentially free.
+func (r *chunkReader) SeekTo(offset int64) error {
 	if offset < 0 {
 		return fmt.Errorf("negative offset")
 	}

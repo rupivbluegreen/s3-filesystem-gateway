@@ -173,7 +173,7 @@ func (r *testChunkReader) adaptChunkSize() {
 	}
 }
 
-func (r *testChunkReader) Seek(offset int64) error {
+func (r *testChunkReader) SeekTo(offset int64) error {
 	if offset < 0 {
 		return fmt.Errorf("negative offset")
 	}
@@ -297,7 +297,7 @@ func TestRandomSeek(t *testing.T) {
 
 	// Now seek to a random spot.
 	seekOff := int64(2*1024*1024 + 500)
-	if err := r.Seek(seekOff); err != nil {
+	if err := r.SeekTo(seekOff); err != nil {
 		t.Fatalf("seek error: %v", err)
 	}
 
@@ -367,7 +367,7 @@ func TestSeekNegativeOffset(t *testing.T) {
 	src := &fakeS3Source{data: makeData(1024)}
 	r := newTestChunkReader(src, "test/file", 1024)
 
-	err := r.Seek(-1)
+	err := r.SeekTo(-1)
 	if err == nil {
 		t.Fatal("expected error for negative seek offset")
 	}
@@ -389,7 +389,7 @@ func TestSeekWithinBuffer(t *testing.T) {
 	callsBefore := len(src.calls)
 
 	// Seek within the already-buffered region (first 1MB chunk).
-	if err := r.Seek(512); err != nil {
+	if err := r.SeekTo(512); err != nil {
 		t.Fatalf("seek error: %v", err)
 	}
 
