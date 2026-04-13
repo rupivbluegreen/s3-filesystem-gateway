@@ -1,0 +1,91 @@
+name: Bug report
+description: Report a bug in s3-filesystem-gateway
+title: "[bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report. Please search existing issues first to avoid duplicates.
+        **Do not** report security vulnerabilities here — use [GitHub Security Advisories](https://github.com/rupivbluegreen/s3-filesystem-gateway/security/advisories/new) instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: Gateway version
+      description: Release tag (e.g. `v0.1.0`), a git SHA, or `main`.
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: backend
+    attributes:
+      label: S3 backend
+      options:
+        - MinIO
+        - AWS S3
+        - Dell ObjectScale
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: kernel
+    attributes:
+      label: NFS client kernel version
+      description: "Output of `uname -r` on the machine running the mount"
+      placeholder: "6.8.0-107-generic"
+    validations:
+      required: true
+
+  - type: textarea
+    id: mount_options
+    attributes:
+      label: Mount command used
+      description: The exact `mount` invocation that reproduces the issue.
+      render: shell
+      placeholder: "sudo mount -t nfs4 -o vers=4.0,port=2049,nolock localhost:/ /mnt/s3"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered list is easiest to read.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Gateway logs
+      description: Paste relevant log lines. Please redact credentials, bucket names, and anything sensitive.
+      render: shell
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-flight checklist
+      options:
+        - label: I searched existing issues before filing
+          required: true
+        - label: I tried with the latest published release
+          required: true
+        - label: I am not reporting a security vulnerability here
+          required: true

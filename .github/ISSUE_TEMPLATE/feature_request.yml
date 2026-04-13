@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an idea or enhancement for s3-filesystem-gateway
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For anything non-trivial, please open a [GitHub Discussion](https://github.com/rupivbluegreen/s3-filesystem-gateway/discussions) first so we can agree on the approach before you or someone else writes code.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: A clear description of the use case or pain point.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like the gateway to do differently?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds or alternative approaches did you try or reject?
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Screenshots, links, related issues, etc.

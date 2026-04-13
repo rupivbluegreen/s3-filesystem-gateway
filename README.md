@@ -1,5 +1,13 @@
 # S3 Filesystem Gateway
 
+[![CI](https://github.com/rupivbluegreen/s3-filesystem-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/rupivbluegreen/s3-filesystem-gateway/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/rupivbluegreen/s3-filesystem-gateway)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/rupivbluegreen/s3-filesystem-gateway)](https://github.com/rupivbluegreen/s3-filesystem-gateway/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/vipurkumar/s3-filesystem-gateway)](https://goreportcard.com/report/github.com/vipurkumar/s3-filesystem-gateway)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/rupivbluegreen/s3-filesystem-gateway/badge)](https://scorecard.dev/viewer/?uri=github.com/rupivbluegreen/s3-filesystem-gateway)
+[![Docker Pulls (GHCR)](https://img.shields.io/badge/ghcr.io-rupivbluegreen%2Fs3--filesystem--gateway-blue?logo=github)](https://github.com/rupivbluegreen/s3-filesystem-gateway/pkgs/container/s3-filesystem-gateway)
+[![Docker Pulls (Hub)](https://img.shields.io/docker/pulls/vipurkumar/s3-filesystem-gateway)](https://hub.docker.com/r/vipurkumar/s3-filesystem-gateway)
+
 Enterprise-grade NFSv4.1-to-S3 gateway written in Go. Exposes S3-compatible object storage as an NFS filesystem.
 
 ## Overview

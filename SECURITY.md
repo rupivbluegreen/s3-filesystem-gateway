@@ -4,15 +4,17 @@
 
 If you discover a security vulnerability in s3-filesystem-gateway, please report it responsibly.
 
-**Email:** security@s3-filesystem-gateway.dev
+**Primary channel:** Use GitHub Security Advisories private vulnerability reporting: <https://github.com/rupivbluegreen/s3-filesystem-gateway/security/advisories/new>
+
+**Secondary (fallback) channel:** `security@s3-filesystem-gateway.dev`
+
+**Do not** open a public GitHub issue for security vulnerabilities.
 
 Please include:
 - A description of the vulnerability
 - Steps to reproduce
 - Potential impact
 - Suggested fix (if any)
-
-**Do not** open a public GitHub issue for security vulnerabilities.
 
 ### Response Timeline
 
@@ -59,19 +61,13 @@ The virtual inode allocator includes overflow detection to prevent inode number 
 ## Known Limitations
 
 ### NFS Traffic Is Unencrypted
-NFS traffic between clients and the gateway is transmitted in plaintext. NFSv4 with Kerberos authentication and encryption is planned for a future release. In the meantime, deploy the gateway on a trusted network or use a VPN/tunnel.
+> NFS traffic between clients and the gateway is transmitted in plaintext in v0.1.0. **Native RFC 9289 RPC-with-TLS is planned for v0.3.0**, coupled with NFSv4.1/4.2 session support. Until then, deploy the gateway on a trusted network segment, or terminate TLS out-of-band via a Wireguard mesh / stunnel tunnel.
 
 ### No NFS Client Authentication
-The gateway uses AUTH_SYS (traditional UNIX UID/GID) for NFS authentication, which provides no cryptographic verification of client identity. Kerberos-based authentication (RPCSEC_GSS) is planned.
-
-### No Rate Limiting
-There is currently no built-in rate limiting for NFS operations or S3 API calls. This is planned for a future release. Use network-level rate limiting or S3 bucket policies as a workaround.
+> The gateway uses AUTH_SYS (traditional UNIX UID/GID) for NFS authentication, which provides no cryptographic verification of client identity. When RFC 9289 TLS lands in v0.3.0, mutual-TLS with client certificates will be the recommended way to authenticate clients cryptographically. Kerberos (RPCSEC_GSS) is parked indefinitely -- TLS covers the same threat model with much less operational burden.
 
 ### Rename Is Not Atomic
 Rename operations are implemented as copy-then-delete on S3, which is not atomic. A failure during rename may result in the object existing at both the old and new keys. This is an inherent limitation of S3's object storage model.
-
-### chmod/chown Return ENOTSUP
-S3 does not support POSIX file ownership or permission metadata. Calls to `chmod` and `chown` return `ENOTSUP`. All files are presented with a fixed owner and mode.
 
 ## Dependency Security
 
