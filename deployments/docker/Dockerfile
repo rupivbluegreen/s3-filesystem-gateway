@@ -21,13 +21,18 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
 
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates wget
+RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /s3nfsgw /usr/local/bin/s3nfsgw
 
 EXPOSE 2049 9090
 
-RUN adduser -D -u 10001 -g "" appuser
+RUN adduser -D -u 10001 -g "" appuser \
+ && mkdir -p /var/lib/s3nfsgw /var/cache/s3gw \
+ && chown -R appuser:appuser /var/lib/s3nfsgw /var/cache/s3gw
+
+VOLUME ["/var/lib/s3nfsgw", "/var/cache/s3gw"]
+
 USER appuser
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
