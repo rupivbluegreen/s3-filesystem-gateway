@@ -20,7 +20,9 @@ NFS Clients --> [NFSv4.1 Server] --> [S3 Filesystem] --> [Metadata Cache] --> [S
 - **S3-compatible backends** -- MinIO, AWS S3, Dell ObjectScale, any S3-compatible storage
 - **Read path** -- chunked ranged reads with adaptive prefetch (1MB -> 4MB -> 16MB)
 - **Write path** -- local temp file buffering with upload-on-close semantics
-- **Full POSIX operations** -- create, mkdir, remove, rename (copy+delete), stat, readdir
+- **Full POSIX operations** -- create, mkdir, remove, rename (copy+delete), stat, readdir, chmod, chown, truncate, symlink
+- **Read-after-write consistency** -- cache refresh on write close
+- **Rate limiting** -- token-bucket limiter for S3 request shaping
 - **Metadata cache** -- in-memory LRU with TTL-based expiry, negative caching, directory listing cache
 - **Data cache** -- disk-based LRU with ETag coherency, SHA256-keyed shard storage, configurable max size
 - **POSIX metadata** -- uid/gid/mode stored as S3 user-metadata headers (`x-amz-meta-uid/gid/mode`)
@@ -184,16 +186,15 @@ make all            # fmt + vet + lint + test + build
 - Phase 1: NFS handle/inode management, S3 filesystem read path, NFSv4 server wiring
 - Phase 2: Metadata cache (in-memory LRU + bbolt), ranged reads with adaptive prefetch
 - Phase 3: Write operations (create, mkdir, remove, rename), cache invalidation on writes
-- Phase 4: Disk-based data cache with ETag coherency
+- Phase 4: Disk-based data cache with ETag coherency, wired into the read path with TTL expiry
 - Phase 5: Prometheus metrics, health/readiness endpoints, graceful shutdown
+- Phase 6 (AWS parity P0-P3): chmod/chown via S3 metadata replace, truncate via empty upload, symlinks via marker objects, read-after-write consistency, token-bucket rate limiter, Grafana dashboard template
 
 ### Planned
 
 - Dell ObjectScale compatibility testing
 - Integration test suite for MinIO
 - YAML config file loading (currently defaults + env vars only)
-- Chmod/chown implementation via S3 metadata updates
-- Data cache integration into read path (currently metadata cache only)
 
 ## License
 
