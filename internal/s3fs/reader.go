@@ -118,7 +118,7 @@ func (r *chunkReader) fetchChunk(off int64) error {
 	// Try data cache first.
 	if r.dc != nil && r.etag != "" {
 		if rc, ok := r.dc.Get(r.s3Key, r.etag); ok {
-			defer rc.Close()
+			defer func() { _ = rc.Close() }()
 			if seeker, ok := rc.(io.ReadSeeker); ok {
 				if _, err := seeker.Seek(off, io.SeekStart); err == nil {
 					if cap(r.buf) < int(length) {
@@ -146,7 +146,7 @@ func (r *chunkReader) fetchChunk(off int64) error {
 	if err != nil {
 		return fmt.Errorf("fetch chunk at %d: %w", off, err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	// Ensure buffer is large enough.
 	if cap(r.buf) < int(length) {

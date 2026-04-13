@@ -133,8 +133,7 @@ func TestIncrDecrConnections(t *testing.T) {
 
 func TestMetricsRegistered(t *testing.T) {
 	// Verify all metrics are registered with the default registry by collecting.
-	metricFamilies, err := prometheus.DefaultGatherer.Gather()
-	if err != nil {
+	if _, err := prometheus.DefaultGatherer.Gather(); err != nil {
 		t.Fatalf("failed to gather metrics: %v", err)
 	}
 
@@ -159,7 +158,7 @@ func TestMetricsRegistered(t *testing.T) {
 	IncrConnections()
 	DecrConnections()
 
-	metricFamilies, err = prometheus.DefaultGatherer.Gather()
+	metricFamilies, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
 		t.Fatalf("failed to gather metrics: %v", err)
 	}

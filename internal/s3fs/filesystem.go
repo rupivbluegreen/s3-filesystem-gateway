@@ -13,6 +13,7 @@ import (
 	"time"
 
 	nfs "github.com/smallfz/libnfs-go/fs"
+
 	"github.com/vipurkumar/s3-filesystem-gateway/internal/cache"
 	s3client "github.com/vipurkumar/s3-filesystem-gateway/internal/s3"
 )
@@ -48,7 +49,7 @@ func (fs *S3FS) SetCreds(creds nfs.Creds) {
 func (fs *S3FS) Attributes() *nfs.Attributes {
 	return &nfs.Attributes{
 		LinkSupport:     false, // S3 doesn't support hard links
-		SymlinkSupport:  true, // symlinks stored as S3 marker objects
+		SymlinkSupport:  true,  // symlinks stored as S3 marker objects
 		ChownRestricted: true,
 		MaxName:         1024,    // S3 key max is 1024 bytes
 		MaxRead:         1048576, // 1MB

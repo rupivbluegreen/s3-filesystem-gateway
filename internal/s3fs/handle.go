@@ -47,7 +47,7 @@ func NewHandleStore(dbPath string) (*HandleStore, error) {
 	}
 
 	if err := store.init(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 

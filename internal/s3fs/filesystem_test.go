@@ -229,10 +229,10 @@ type mockCreds struct {
 	uid, gid uint32
 }
 
-func (c mockCreds) Host() string      { return "localhost" }
-func (c mockCreds) Uid() uint32       { return c.uid }
-func (c mockCreds) Gid() uint32       { return c.gid }
-func (c mockCreds) Groups() []uint32  { return nil }
+func (c mockCreds) Host() string     { return "localhost" }
+func (c mockCreds) Uid() uint32      { return c.uid }
+func (c mockCreds) Gid() uint32      { return c.gid }
+func (c mockCreds) Groups() []uint32 { return nil }
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -489,15 +489,15 @@ func TestGetFileId(t *testing.T) {
 // otherFileInfo implements nfs.FileInfo but is NOT *fileInfo.
 type otherFileInfo struct{}
 
-func (o *otherFileInfo) Name() string        { return "other" }
-func (o *otherFileInfo) Size() int64          { return 0 }
-func (o *otherFileInfo) Mode() os.FileMode    { return 0 }
-func (o *otherFileInfo) ModTime() time.Time   { return time.Time{} }
-func (o *otherFileInfo) IsDir() bool          { return false }
-func (o *otherFileInfo) Sys() interface{}     { return nil }
-func (o *otherFileInfo) ATime() time.Time     { return time.Time{} }
-func (o *otherFileInfo) CTime() time.Time     { return time.Time{} }
-func (o *otherFileInfo) NumLinks() int        { return 1 }
+func (o *otherFileInfo) Name() string       { return "other" }
+func (o *otherFileInfo) Size() int64        { return 0 }
+func (o *otherFileInfo) Mode() os.FileMode  { return 0 }
+func (o *otherFileInfo) ModTime() time.Time { return time.Time{} }
+func (o *otherFileInfo) IsDir() bool        { return false }
+func (o *otherFileInfo) Sys() interface{}   { return nil }
+func (o *otherFileInfo) ATime() time.Time   { return time.Time{} }
+func (o *otherFileInfo) CTime() time.Time   { return time.Time{} }
+func (o *otherFileInfo) NumLinks() int      { return 1 }
 
 func TestGetFileIdNonFileInfo(t *testing.T) {
 	fsys, _, cleanup := setupTestFS(t)

@@ -81,11 +81,11 @@ func TestLoad_MissingCredentials(t *testing.T) {
 
 func TestLoad_EnvOverrides(t *testing.T) {
 	tests := []struct {
-		name    string
-		envKey  string
-		envVal  string
-		check   func(*Config) bool
-		desc    string
+		name   string
+		envKey string
+		envVal string
+		check  func(*Config) bool
+		desc   string
 	}{
 		{
 			name:   "S3_ENDPOINT",

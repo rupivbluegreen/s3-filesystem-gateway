@@ -4,7 +4,6 @@
 package s3fs
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	nfs "github.com/smallfz/libnfs-go/fs"
+
 	"github.com/vipurkumar/s3-filesystem-gateway/internal/cache"
 	s3client "github.com/vipurkumar/s3-filesystem-gateway/internal/s3"
 )
@@ -121,7 +121,7 @@ func (f *s3File) Truncate() error {
 	f.info.size = 0
 	f.offset = 0
 	if f.chunked != nil {
-		f.chunked.Close()
+		_ = f.chunked.Close()
 		f.chunked = nil
 	}
 
@@ -295,7 +295,7 @@ func (f *s3WritableFile) ensureDownloaded() error {
 	if err != nil {
 		return fmt.Errorf("download %s: %w", f.s3Key, err)
 	}
-	defer obj.Close()
+	defer func() { _ = obj.Close() }()
 	if _, err := io.Copy(f.tmp, obj); err != nil {
 		return fmt.Errorf("buffer %s to temp: %w", f.s3Key, err)
 	}
@@ -382,8 +382,8 @@ func (f *s3WritableFile) Close() error {
 	f.closed = true
 
 	defer func() {
-		f.tmp.Close()
-		os.Remove(f.tmp.Name())
+		_ = f.tmp.Close()
+		_ = os.Remove(f.tmp.Name())
 	}()
 
 	// Get file size
@@ -433,18 +433,15 @@ type dirFile struct {
 
 var _ nfs.File = (*dirFile)(nil)
 
-func (f *dirFile) Name() string                      { return f.path }
-func (f *dirFile) Stat() (nfs.FileInfo, error)        { return f.info, nil }
-func (f *dirFile) Read([]byte) (int, error)           { return 0, fmt.Errorf("cannot read directory") }
-func (f *dirFile) Write([]byte) (int, error)          { return 0, fmt.Errorf("cannot write directory") }
-func (f *dirFile) Seek(int64, int) (int64, error)     { return 0, nil }
+func (f *dirFile) Name() string                        { return f.path }
+func (f *dirFile) Stat() (nfs.FileInfo, error)         { return f.info, nil }
+func (f *dirFile) Read([]byte) (int, error)            { return 0, fmt.Errorf("cannot read directory") }
+func (f *dirFile) Write([]byte) (int, error)           { return 0, fmt.Errorf("cannot write directory") }
+func (f *dirFile) Seek(int64, int) (int64, error)      { return 0, nil }
 func (f *dirFile) Truncate() error                     { return fmt.Errorf("cannot truncate directory") }
 func (f *dirFile) Sync() error                         { return nil }
 func (f *dirFile) Readdir(int) ([]nfs.FileInfo, error) { return nil, nil }
 func (f *dirFile) Close() error                        { return nil }
-
-// emptyReader is an io.ReadCloser that returns no data.
-var emptyReader = io.NopCloser(bytes.NewReader(nil))
 
 // s3KeyFromPath converts a POSIX path to an S3 key.
 // Root "/" maps to "", "/foo/bar" maps to "foo/bar".

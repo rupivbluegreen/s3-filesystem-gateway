@@ -147,7 +147,7 @@ func (dc *DataCache) Get(s3Key, etag string) (io.ReadCloser, bool) {
 	// Check TTL expiry.
 	if dc.config.DataTTL > 0 && time.Since(entry.accessTime) > dc.config.DataTTL {
 		path := dc.cachePath(key)
-		os.Remove(path)
+		_ = os.Remove(path)
 		dc.currentSize -= entry.size
 		dc.order.Remove(elem)
 		delete(dc.items, key)
@@ -202,12 +202,12 @@ func (dc *DataCache) Put(s3Key, etag string, reader io.Reader, size int64) error
 		err = cerr
 	}
 	if err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("write cache file: %w", err)
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("rename cache file: %w", err)
 	}
 
@@ -248,7 +248,7 @@ func (dc *DataCache) Invalidate(s3Key string) {
 		entry := elem.Value.(*dataEntry)
 		if entry.s3Key == s3Key {
 			path := dc.cachePath(key)
-			os.Remove(path)
+			_ = os.Remove(path)
 			dc.currentSize -= entry.size
 			dc.order.Remove(elem)
 			delete(dc.items, key)
@@ -304,7 +304,7 @@ func (dc *DataCache) evict() {
 				break
 			}
 			path := dc.cachePath(entry.key)
-			os.Remove(path)
+			_ = os.Remove(path)
 			dc.currentSize -= entry.size
 			dc.order.Remove(back)
 			delete(dc.items, entry.key)
@@ -316,7 +316,7 @@ func (dc *DataCache) evict() {
 		back := dc.order.Back()
 		entry := back.Value.(*dataEntry)
 		path := dc.cachePath(entry.key)
-		os.Remove(path)
+		_ = os.Remove(path)
 		dc.currentSize -= entry.size
 		dc.order.Remove(back)
 		delete(dc.items, entry.key)

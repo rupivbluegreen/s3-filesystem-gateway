@@ -77,7 +77,7 @@ func (h *HealthServer) Stop(ctx context.Context) error {
 func (h *HealthServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func (h *HealthServer) handleReady(w http.ResponseWriter, r *http.Request) {
@@ -85,11 +85,11 @@ func (h *HealthServer) handleReady(w http.ResponseWriter, r *http.Request) {
 	if err := h.checker(); err != nil {
 		slog.Warn("readiness check failed", "error", err)
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"status": "not ready",
 		})
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
 }

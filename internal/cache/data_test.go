@@ -545,7 +545,6 @@ func (e *errReader) Read(p []byte) (int, error) {
 	return 0, io.ErrUnexpectedEOF
 }
 
-
 func TestDataCache_ScanDirEmpty(t *testing.T) {
 	dir := t.TempDir()
 
@@ -719,19 +718,19 @@ type brokenInfoEntry struct {
 }
 
 func (b *brokenInfoEntry) Name() string               { return b.name }
-func (b *brokenInfoEntry) IsDir() bool                 { return false }
-func (b *brokenInfoEntry) Type() os.FileMode           { return 0 }
-func (b *brokenInfoEntry) Info() (os.FileInfo, error)  { return nil, fmt.Errorf("injected info error") }
+func (b *brokenInfoEntry) IsDir() bool                { return false }
+func (b *brokenInfoEntry) Type() os.FileMode          { return 0 }
+func (b *brokenInfoEntry) Info() (os.FileInfo, error) { return nil, fmt.Errorf("injected info error") }
 
 func TestDataCache_ScanDirNonExistent(t *testing.T) {
 	// Manually create a DataCache with a non-existent scanDir path.
 	// scanDir should handle ReadDir error gracefully.
 	dc := &DataCache{
-		config:  DataCacheConfig{Dir: "/nonexistent/path/for/test"},
-		items:   make(map[string]*list.Element),
-		order:   list.New(),
-		stopCh:  make(chan struct{}),
-		done:    make(chan struct{}),
+		config: DataCacheConfig{Dir: "/nonexistent/path/for/test"},
+		items:  make(map[string]*list.Element),
+		order:  list.New(),
+		stopCh: make(chan struct{}),
+		done:   make(chan struct{}),
 	}
 	// Should not panic.
 	dc.scanDir()

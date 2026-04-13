@@ -113,7 +113,7 @@ func (c *Client) GetObject(ctx context.Context, key string) (io.ReadCloser, *Obj
 	}
 	info, err := obj.Stat()
 	if err != nil {
-		obj.Close()
+		_ = obj.Close()
 		return nil, nil, err
 	}
 	return obj, &ObjectInfo{

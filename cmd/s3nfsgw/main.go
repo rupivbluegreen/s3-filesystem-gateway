@@ -109,7 +109,7 @@ func main() {
 		slog.Error("failed to open handle store", "error", err)
 		os.Exit(1)
 	}
-	defer handles.Close()
+	defer func() { _ = handles.Close() }()
 	slog.Info("handle store opened", "path", dbPath)
 
 	// 4. Start NFSv4 server

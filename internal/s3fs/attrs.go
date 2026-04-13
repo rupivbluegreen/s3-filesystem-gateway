@@ -40,15 +40,15 @@ type fileInfo struct {
 
 var _ nfs.FileInfo = (*fileInfo)(nil)
 
-func (fi *fileInfo) Name() string        { return fi.name }
-func (fi *fileInfo) Size() int64          { return fi.size }
-func (fi *fileInfo) Mode() os.FileMode    { return fi.mode }
-func (fi *fileInfo) ModTime() time.Time   { return fi.modTime }
-func (fi *fileInfo) IsDir() bool          { return fi.isDir }
-func (fi *fileInfo) Sys() interface{}     { return nil }
-func (fi *fileInfo) ATime() time.Time     { return fi.modTime }
-func (fi *fileInfo) CTime() time.Time     { return fi.modTime }
-func (fi *fileInfo) NumLinks() int        { return fi.numLinks }
+func (fi *fileInfo) Name() string       { return fi.name }
+func (fi *fileInfo) Size() int64        { return fi.size }
+func (fi *fileInfo) Mode() os.FileMode  { return fi.mode }
+func (fi *fileInfo) ModTime() time.Time { return fi.modTime }
+func (fi *fileInfo) IsDir() bool        { return fi.isDir }
+func (fi *fileInfo) Sys() interface{}   { return nil }
+func (fi *fileInfo) ATime() time.Time   { return fi.modTime }
+func (fi *fileInfo) CTime() time.Time   { return fi.modTime }
+func (fi *fileInfo) NumLinks() int      { return fi.numLinks }
 
 // newFileInfoFromS3 creates a fileInfo from S3 object metadata.
 func newFileInfoFromS3(name string, size int64, lastModified time.Time, isDir bool, inode uint64, userMeta map[string]string) *fileInfo {
