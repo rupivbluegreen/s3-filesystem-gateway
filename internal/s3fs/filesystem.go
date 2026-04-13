@@ -4,6 +4,7 @@
 package s3fs
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -143,14 +144,22 @@ func (fs *S3FS) OpenFile(path string, flags int, perm os.FileMode) (nfs.File, er
 		}, nil
 	}
 
-	// If creating a new file, return a writable file
+	// If creating a new file, persist an empty placeholder immediately so
+	// subsequent NFS compounds (GETATTR/ACCESS on the returned filehandle)
+	// see the object exist on S3. Close() will overwrite with real content.
 	if writable {
 		inode, err := fs.handles.GetOrCreateInode(s3Key)
 		if err != nil {
 			return nil, err
 		}
+		meta := posixMetadata(DefaultUID, DefaultGID, DefaultFileMode)
+		if err := fs.s3.PutObject(context.Background(), s3Key, bytes.NewReader(nil), 0, meta); err != nil {
+			return nil, fmt.Errorf("create empty placeholder: %w", err)
+		}
 		info := newFileInfoFromS3(nameFromPath(path), 0, now(), false, inode, nil)
-		return newWritableFile(fs, path, s3Key, info)
+		fs.cachePut(s3Key, info)
+		fs.cacheInvalidateParent(s3Key)
+		return newEmptyWritableFile(fs, path, s3Key, info)
 	}
 
 	// Try as directory (with trailing slash)

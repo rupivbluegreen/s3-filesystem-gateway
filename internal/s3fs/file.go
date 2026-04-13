@@ -237,19 +237,29 @@ func (f *s3File) Close() error {
 	return nil
 }
 
-// s3WritableFile buffers writes to a local temp file and uploads to S3 on Close.
+// s3WritableFile is a read-write file backed by a local temp file. On first
+// Read or Write of an existing S3 object, it lazily downloads the object into
+// the temp file (download-modify-upload). Newly created files skip the
+// download. On Close, the temp file is uploaded back to S3.
+//
+// libnfs-go opens every file with O_RDWR regardless of the client's intent,
+// so this type must support both reads and writes — we cannot rely on a
+// separate read-only type.
 type s3WritableFile struct {
-	mu      sync.Mutex
-	fs      *S3FS
-	path    string // full POSIX path
-	s3Key   string // S3 object key
-	info    *fileInfo
-	tmp     *os.File // local temp file for buffering writes
-	closed  bool
+	mu         sync.Mutex
+	fs         *S3FS
+	path       string
+	s3Key      string
+	info       *fileInfo
+	tmp        *os.File
+	downloaded bool // true once tmp contains S3 contents (or file is newly created)
+	closed     bool
 }
 
 var _ nfs.File = (*s3WritableFile)(nil)
 
+// newWritableFile creates a writable file whose tmp is pre-populated with the
+// current S3 contents. Used when opening an existing file.
 func newWritableFile(fsys *S3FS, path, s3Key string, info *fileInfo) (*s3WritableFile, error) {
 	tmp, err := os.CreateTemp(os.TempDir(), "s3gw-*")
 	if err != nil {
@@ -264,6 +274,38 @@ func newWritableFile(fsys *S3FS, path, s3Key string, info *fileInfo) (*s3Writabl
 	}, nil
 }
 
+// newEmptyWritableFile creates a writable file for a freshly-created S3 object.
+// No download is needed because the object is known to be empty.
+func newEmptyWritableFile(fsys *S3FS, path, s3Key string, info *fileInfo) (*s3WritableFile, error) {
+	f, err := newWritableFile(fsys, path, s3Key, info)
+	if err != nil {
+		return nil, err
+	}
+	f.downloaded = true // empty placeholder, nothing to fetch
+	return f, nil
+}
+
+// ensureDownloaded lazily fetches the S3 object into the temp file on first
+// read or write. Must be called with f.mu held.
+func (f *s3WritableFile) ensureDownloaded() error {
+	if f.downloaded {
+		return nil
+	}
+	obj, _, err := f.fs.s3.GetObject(context.Background(), f.s3Key)
+	if err != nil {
+		return fmt.Errorf("download %s: %w", f.s3Key, err)
+	}
+	defer obj.Close()
+	if _, err := io.Copy(f.tmp, obj); err != nil {
+		return fmt.Errorf("buffer %s to temp: %w", f.s3Key, err)
+	}
+	if _, err := f.tmp.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("seek after download: %w", err)
+	}
+	f.downloaded = true
+	return nil
+}
+
 func (f *s3WritableFile) Name() string {
 	return f.path
 }
@@ -273,7 +315,16 @@ func (f *s3WritableFile) Stat() (nfs.FileInfo, error) {
 }
 
 func (f *s3WritableFile) Read(p []byte) (int, error) {
-	return 0, fmt.Errorf("cannot read a write-only file")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.closed {
+		return 0, os.ErrClosed
+	}
+	if err := f.ensureDownloaded(); err != nil {
+		return 0, err
+	}
+	return f.tmp.Read(p)
 }
 
 func (f *s3WritableFile) Write(p []byte) (int, error) {
@@ -282,6 +333,9 @@ func (f *s3WritableFile) Write(p []byte) (int, error) {
 
 	if f.closed {
 		return 0, os.ErrClosed
+	}
+	if err := f.ensureDownloaded(); err != nil {
+		return 0, err
 	}
 	return f.tmp.Write(p)
 }
@@ -293,6 +347,9 @@ func (f *s3WritableFile) Seek(offset int64, whence int) (int64, error) {
 	if f.closed {
 		return 0, os.ErrClosed
 	}
+	if err := f.ensureDownloaded(); err != nil {
+		return 0, err
+	}
 	return f.tmp.Seek(offset, whence)
 }
 
@@ -303,6 +360,7 @@ func (f *s3WritableFile) Truncate() error {
 	if f.closed {
 		return os.ErrClosed
 	}
+	f.downloaded = true // overwriting any S3 contents
 	return f.tmp.Truncate(0)
 }
 

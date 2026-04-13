@@ -24,8 +24,12 @@ type HealthServer struct {
 	checker HealthChecker
 }
 
-// NewHealthServer creates a new health/metrics HTTP server.
+// NewHealthServer creates a new health/metrics HTTP server. If checker is nil,
+// /ready always reports ready — guards against a nil function call in handleReady.
 func NewHealthServer(addr string, checker HealthChecker) *HealthServer {
+	if checker == nil {
+		checker = func() error { return nil }
+	}
 	h := &HealthServer{
 		checker: checker,
 	}

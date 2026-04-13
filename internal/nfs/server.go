@@ -7,13 +7,25 @@ import (
 	"fmt"
 	"log/slog"
 
-	nfs "github.com/smallfz/libnfs-go/fs"
+	libauth "github.com/smallfz/libnfs-go/auth"
 	nfsbackend "github.com/smallfz/libnfs-go/backend"
+	nfs "github.com/smallfz/libnfs-go/fs"
+	libnfs "github.com/smallfz/libnfs-go/nfs"
 	nfsserver "github.com/smallfz/libnfs-go/server"
 	"github.com/vipurkumar/s3-filesystem-gateway/internal/cache"
 	s3client "github.com/vipurkumar/s3-filesystem-gateway/internal/s3"
 	"github.com/vipurkumar/s3-filesystem-gateway/internal/s3fs"
 )
+
+// acceptAuth accepts AUTH_NONE probes and decodes AUTH_SYS credentials for
+// real operations. libnfs-go's backend requires a non-nil AuthenticationHandler;
+// passing nil causes a SIGSEGV in Muxv4.Authenticate on the first client compound.
+func acceptAuth(cred, verf *libnfs.Auth) (*libnfs.Auth, nfs.Creds, error) {
+	if cred == nil || cred.Flavor == libnfs.AUTH_FLAVOR_NULL {
+		return libauth.Null(cred, verf)
+	}
+	return libauth.Unix(cred, verf)
+}
 
 // Server wraps the libnfs-go NFSv4 server.
 type Server struct {
@@ -60,7 +72,7 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 		return s3fs.NewS3FS(s3c, handles, mc, dc)
 	}
 
-	backend := nfsbackend.New(vfsLoader, nil)
+	backend := nfsbackend.New(vfsLoader, acceptAuth)
 
 	addr := fmt.Sprintf("%s:%d", cfg.BindAddr, cfg.Port)
 	srv, err := nfsserver.NewServerTCP(addr, backend)
