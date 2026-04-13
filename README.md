@@ -37,27 +37,45 @@ NFS Clients --> [NFSv4.1 Server] --> [S3 Filesystem] --> [Metadata Cache] --> [S
 ### Prerequisites
 
 - Docker and Docker Compose
-- Go 1.22+ (for development)
+- Linux host with `nfs-common` (for mounting)
 
-### Run with Docker Compose
+### One-shot dev/test environment (published image)
+
+No clone required — download a single compose file that pulls the gateway image from GHCR and bundles MinIO:
 
 ```bash
-# Start MinIO + gateway
-docker compose -f deployments/docker/docker-compose.yml up
+curl -O https://raw.githubusercontent.com/rupivbluegreen/s3-filesystem-gateway/main/deployments/docker/docker-compose.quickstart.yml
+docker compose -f docker-compose.quickstart.yml up -d
 
 # Mount from another terminal (Linux)
-sudo mount -t nfs4 localhost:/ /mnt/s3
+sudo mount -t nfs4 -o port=2049,nolock localhost:/ /mnt/s3
 
 # Use it
 ls /mnt/s3
 echo "hello" > /mnt/s3/test.txt
 cat /mnt/s3/test.txt
 mkdir /mnt/s3/subdir
+
+# MinIO console at http://localhost:9001 (minioadmin / minioadmin)
+# Gateway health at http://localhost:9090/health
 ```
+
+### Published images
+
+Images are built multi-arch (`linux/amd64` + `linux/arm64`) on each `v*` git tag and published to both registries:
+
+- `ghcr.io/rupivbluegreen/s3-filesystem-gateway`
+- `docker.io/rupivbluegreen/s3-filesystem-gateway`
+
+Tag conventions: `:latest` (latest stable release), `:0.1.0` (exact semver), `:0.1` (minor), `:0` (major).
 
 ### Build from Source
 
 ```bash
+git clone https://github.com/rupivbluegreen/s3-filesystem-gateway.git
+cd s3-filesystem-gateway
+docker compose -f deployments/docker/docker-compose.yml up   # builds locally
+# or
 make build
 ./bin/s3nfsgw --config configs/default.yaml --data-dir /var/lib/s3nfsgw
 ```

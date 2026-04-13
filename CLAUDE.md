@@ -32,7 +32,13 @@ go test ./internal/cache/ -v
 ./bin/s3nfsgw --config configs/default.yaml --data-dir /var/lib/s3nfsgw
 ```
 
-Docker compose files live in `deployments/docker/` (`docker-compose.yml`, `docker-compose.test.yml`, `docker-compose.objectscale.yml`).
+Docker compose files live in `deployments/docker/`:
+- `docker-compose.yml` — dev from source (`build:` stanza)
+- `docker-compose.quickstart.yml` — consumer one-shot, pulls published image + bundled MinIO
+- `docker-compose.test.yml` — integration test rig
+- `docker-compose.objectscale.yml` — ObjectScale override
+
+**Release a new image:** `git tag v0.1.0 && git push origin v0.1.0` triggers `.github/workflows/docker-publish.yml`, which builds multi-arch (`linux/amd64` + `linux/arm64`) and pushes to both `ghcr.io/rupivbluegreen/s3-filesystem-gateway` and `docker.io/rupivbluegreen/s3-filesystem-gateway`. Requires `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` repo secrets for Docker Hub.
 
 ## Architecture
 
