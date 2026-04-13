@@ -212,9 +212,33 @@ make all            # fmt + vet + lint + test + build
 
 ### Planned
 
+#### v0.2.0 — quality-of-life
+
 - Dell ObjectScale compatibility testing
-- Integration test suite for MinIO
+- Integration test suite for MinIO with a functional NFS-mount healthcheck
 - YAML config file loading (currently defaults + env vars only)
+- README quickstart against the published image (no clone required)
+
+#### v0.3.0 — native NFSv4.1 / NFSv4.2 + RFC 9289 RPC-with-TLS
+
+The marquee feature for v0.3.0 is **native in-transit encryption over NFS** via RFC 9289 STARTTLS — no stunnel, no Wireguard, no out-of-band tunnel. To get there we have to first ship NFSv4.1 session support (the Linux kernel only negotiates `xprtsec=tls` at minorversion ≥ 2), so v0.3.0 is one coherent "modern NFS" release covering all three:
+
+- **NFSv4.1 session ops** — `EXCHANGE_ID`, `CREATE_SESSION`, `SEQUENCE`, `DESTROY_SESSION`, `DESTROY_CLIENTID`, `FREE_STATEID`, `RECLAIM_COMPLETE`. Modern Linux clients no longer need explicit `-o vers=4.0`; the gateway will be simultaneously v4.0/v4.1/v4.2 capable.
+- **NFSv4.2 minorversion advertising** — kernel mounts default to v4.2 and will succeed against the gateway out of the box.
+- **RFC 9289 RPC-with-TLS** — `mount -t nfs4 -o xprtsec=tls gateway:/ /mnt/s3` works on Linux 6.5+ with a server certificate. Configurable via `NFS_TLS_ENABLE`, `NFS_TLS_CERT_FILE`, `NFS_TLS_KEY_FILE`, `NFS_TLS_CLIENT_CA_FILE`, `NFS_TLS_MIN_VERSION` env vars.
+- **NFSv4.2 `COPY` (op 60) → S3 `CopyObject`** — `cp /mnt/s3/big.bin /mnt/s3/big.bak` on intra-bucket copies becomes a single `S3 CopyObject` request. Bytes never leave the object store; an order-of-magnitude perf win for archive/backup workflows.
+- **NFSv4.2 xattrs (RFC 8276)** — `getfattr` / `setfattr` map to S3 user-metadata (`x-amz-meta-xattr-*`). Lets clients store SELinux contexts, file checksums, and arbitrary `user.*` namespace attributes.
+- **NFSv4.2 `SEEK_HOLE` / `SEEK_DATA` stub** — reports "no holes; data extends to EOF" so `lseek` and tools that probe for sparse-file support behave correctly on the non-sparse S3 backend.
+
+Other v4.2 ops that have no useful S3 mapping (`ALLOCATE`, `DEALLOCATE`, `CLONE`, `READ_PLUS`, `WRITE_SAME`, pNFS layout ops) return `NFS4ERR_NOTSUPP` cleanly so userspace tools fall back gracefully.
+
+This work requires a fork of `github.com/smallfz/libnfs-go` (which is currently NFSv4.0 only); the fork lives at `github.com/rupivbluegreen/libnfs-go` and is wired in via a `go.mod replace` directive during development.
+
+#### Parked / on demand
+
+- **Kerberos (`sec=krb5p`)** — RPCSEC_GSS support is parked indefinitely. RFC 9289 TLS covers the same in-transit-encryption threat model with a fraction of the operational burden (no KDC, no keytabs, no clock-skew handling). Will only be revisited if a specific deployment requires Kerberos identity propagation.
+- **pNFS layouts** — out of scope. Fundamentally incompatible with a single-node S3 gateway architecture.
+- **NFSv3** — not served, no plan to.
 
 ## License
 
