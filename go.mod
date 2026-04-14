@@ -38,4 +38,4 @@ require (
 	google.golang.org/protobuf v1.36.8 // indirect
 )
 
-replace github.com/smallfz/libnfs-go => ../libnfs-go
+replace github.com/smallfz/libnfs-go => github.com/rupivbluegreen/libnfs-go v0.3.0

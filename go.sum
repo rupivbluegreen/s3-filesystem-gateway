@@ -50,8 +50,8 @@ github.com/rogpeppe/go-internal v1.10.0 h1:TMyTOH3F/DB16zRVcYyreMH6GnZZrwQVAoYjR
 github.com/rogpeppe/go-internal v1.10.0/go.mod h1:UQnix2H7Ngw/k4C5ijL5+65zddjncjaFoBhdsK/akog=
 github.com/rs/xid v1.6.0 h1:fV591PaemRlL6JfRxGDEPl69wICngIQ3shQtzfy2gxU=
 github.com/rs/xid v1.6.0/go.mod h1:7XoLgs4eV+QndskICGsho+ADou8ySMSjJKDIan90Nz0=
-github.com/smallfz/libnfs-go v0.0.7 h1:7uS1ADMrJqihbQEtXfo8865+gEMl7bHKsDAY7ialKws=
-github.com/smallfz/libnfs-go v0.0.7/go.mod h1:OtfrJ0akgDga0KIhtub2YJoDMnzHBntTAVwXdfNZZTU=
+github.com/rupivbluegreen/libnfs-go v0.3.0 h1:Pi6chtXh2UkCIZYAh/9427d0x/UPn4rREP+tJRhdHKI=
+github.com/rupivbluegreen/libnfs-go v0.3.0/go.mod h1:OtfrJ0akgDga0KIhtub2YJoDMnzHBntTAVwXdfNZZTU=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/tinylib/msgp v1.6.1 h1:ESRv8eL3u+DNHUoSAAQRE50Hm162zqAnBoGv9PzScPY=
