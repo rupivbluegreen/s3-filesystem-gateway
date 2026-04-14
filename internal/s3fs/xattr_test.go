@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -120,6 +121,39 @@ func TestXattr_RejectsNamespacePrefix(t *testing.T) {
 		if err := fs.SetXattr("/f", name, []byte("x"), 0); !errors.Is(err, os.ErrInvalid) {
 			t.Fatalf("SET %q: expected ErrInvalid, got %v", name, err)
 		}
+	}
+}
+
+func TestXattr_CasePreservedAcrossCaseFoldingBackend(t *testing.T) {
+	// Simulate an S3 server (e.g. MinIO) that title-cases the first
+	// letter of every user-metadata header. The hex-encoded key form
+	// must round-trip the original case.
+	fs, mock, cleanup := setupTestFS(t)
+	defer cleanup()
+	mock.put("f", []byte("hi"), map[string]string{MetaKeyMode: "644"})
+
+	if err := fs.SetXattr("/f", "MixedCaseName", []byte("v"), 0); err != nil {
+		t.Fatalf("SetXattr: %v", err)
+	}
+
+	// Pretend the backend folded the header on the way out.
+	mock.mu.Lock()
+	folded := map[string]string{}
+	for k, v := range mock.objects["f"].metadata {
+		if len(k) > 0 {
+			folded[strings.ToUpper(k[:1])+k[1:]] = v
+		}
+	}
+	mock.objects["f"].metadata = folded
+	mock.mu.Unlock()
+
+	got, err := fs.GetXattr("/f", "MixedCaseName")
+	if err != nil || string(got) != "v" {
+		t.Fatalf("GetXattr after fold: got=%q err=%v", got, err)
+	}
+	names, _ := fs.ListXattrs("/f")
+	if len(names) != 1 || names[0] != "MixedCaseName" {
+		t.Fatalf("ListXattrs after fold: %v", names)
 	}
 }
 

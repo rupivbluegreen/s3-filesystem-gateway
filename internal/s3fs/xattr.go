@@ -3,6 +3,7 @@ package s3fs
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -37,10 +38,17 @@ const xattrMaxTotalBytes = 6144
 var _ fs.XattrCapable = (*S3FS)(nil)
 
 // xattrMetaKey is the S3 user-metadata map key for a given xattr name.
-// Example: "checksum" -> "Xattr-checksum". Wire names per RFC 8276 are
-// naked (no namespace prefix) so we reject anything that carries one
-// — a misbehaving caller could otherwise collide with the reserved
-// Uid / Gid / Mode / SymlinkTarget slots.
+// The name portion is hex-encoded so case (and any non-ASCII bytes)
+// survive the S3 round-trip — MinIO and most S3 servers normalise the
+// case of user-metadata header names ("Xattr-checksum" comes back as
+// "Xattr-Checksum"), which would otherwise corrupt xattr names that
+// the kernel expects to round-trip byte-for-byte. Hex output uses the
+// safe `[0-9a-f]` alphabet which is unaffected by case folding.
+//
+// Wire names per RFC 8276 are naked (no namespace prefix) so we
+// reject anything that carries one — a misbehaving caller could
+// otherwise collide with the reserved Uid / Gid / Mode / SymlinkTarget
+// slots.
 func xattrMetaKey(name string) (string, error) {
 	if name == "" {
 		return "", os.ErrInvalid
@@ -50,7 +58,7 @@ func xattrMetaKey(name string) (string, error) {
 			return "", os.ErrInvalid
 		}
 	}
-	return xattrMetaPrefix + name, nil
+	return xattrMetaPrefix + hex.EncodeToString([]byte(name)), nil
 }
 
 // readObjectMeta resolves a POSIX path to an S3 object and returns a
@@ -205,16 +213,22 @@ func findXattr(meta map[string]string, metaKey string) (string, bool) {
 }
 
 // shortFromMetaKey returns the xattr short name if the given user-
-// metadata key is an xattr slot, or ok=false otherwise.
+// metadata key is an xattr slot, or ok=false otherwise. The hex blob
+// after the "Xattr-" prefix is decoded so the name comes back in its
+// original case even though the S3 server case-folded the header.
 func shortFromMetaKey(metaKey string) (string, bool) {
-	// Case-insensitive prefix match against "Xattr-".
 	if len(metaKey) <= len(xattrMetaPrefix) {
 		return "", false
 	}
 	if !strings.EqualFold(metaKey[:len(xattrMetaPrefix)], xattrMetaPrefix) {
 		return "", false
 	}
-	return metaKey[len(xattrMetaPrefix):], true
+	raw := metaKey[len(xattrMetaPrefix):]
+	dec, err := hex.DecodeString(raw)
+	if err != nil {
+		return "", false
+	}
+	return string(dec), true
 }
 
 // totalXattrBytes sums the encoded length of all xattr slots in the
